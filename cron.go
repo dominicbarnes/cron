@@ -13,7 +13,6 @@ import (
 type Cron struct {
 	entries   []*Entry
 	chain     Chain
-	stop      chan struct{}
 	add       chan *Entry
 	remove    chan EntryID
 	snapshot  chan chan []Entry
@@ -33,7 +32,7 @@ type ScheduleParser interface {
 
 // Job is an interface for submitted cron jobs.
 type Job interface {
-	Run()
+	Run(ctx context.Context)
 }
 
 // Schedule describes a job's duty cycle.
@@ -115,7 +114,6 @@ func New(opts ...Option) *Cron {
 		entries:   nil,
 		chain:     NewChain(),
 		add:       make(chan *Entry),
-		stop:      make(chan struct{}),
 		snapshot:  make(chan chan []Entry),
 		remove:    make(chan EntryID),
 		running:   false,
@@ -131,14 +129,14 @@ func New(opts ...Option) *Cron {
 }
 
 // FuncJob is a wrapper that turns a func() into a cron.Job
-type FuncJob func()
+type FuncJob func(ctx context.Context)
 
-func (f FuncJob) Run() { f() }
+func (f FuncJob) Run(ctx context.Context) { f(ctx) }
 
 // AddFunc adds a func to the Cron to be run on the given schedule.
 // The spec is parsed using the time zone of this Cron instance as the default.
 // An opaque ID is returned that can be used to later remove it.
-func (c *Cron) AddFunc(spec string, cmd func()) (EntryID, error) {
+func (c *Cron) AddFunc(spec string, cmd func(context.Context)) (EntryID, error) {
 	return c.AddJob(spec, FuncJob(cmd))
 }
 
@@ -212,18 +210,19 @@ func (c *Cron) Remove(id EntryID) {
 }
 
 // Start the cron scheduler in its own goroutine, or no-op if already started.
-func (c *Cron) Start() {
+func (c *Cron) Start(ctx context.Context) {
 	c.runningMu.Lock()
 	defer c.runningMu.Unlock()
 	if c.running {
 		return
 	}
 	c.running = true
-	go c.run()
+	go c.run(ctx)
 }
 
-// Run the cron scheduler, or no-op if already running.
-func (c *Cron) Run() {
+// Run the cron scheduler, or no-op if already running. It blocks until the
+// given context is canceled.
+func (c *Cron) Run(ctx context.Context) {
 	c.runningMu.Lock()
 	if c.running {
 		c.runningMu.Unlock()
@@ -231,12 +230,12 @@ func (c *Cron) Run() {
 	}
 	c.running = true
 	c.runningMu.Unlock()
-	c.run()
+	c.run(ctx)
 }
 
 // run the scheduler.. this is private just due to the need to synchronize
 // access to the 'running' state variable.
-func (c *Cron) run() {
+func (c *Cron) run(ctx context.Context) {
 	c.logger.Info("start")
 
 	// Figure out the next activation times for each entry.
@@ -270,7 +269,7 @@ func (c *Cron) run() {
 					if e.Next.After(now) || e.Next.IsZero() {
 						break
 					}
-					c.startJob(e.WrappedJob)
+					c.startJob(ctx, e.WrappedJob)
 					e.Prev = e.Next
 					e.Next = e.Schedule.Next(now)
 					c.logger.Info("run", "now", now, "entry", e.ID, "next", e.Next)
@@ -287,7 +286,7 @@ func (c *Cron) run() {
 				replyChan <- c.entrySnapshot()
 				continue
 
-			case <-c.stop:
+			case <-ctx.Done():
 				timer.Stop()
 				c.logger.Info("stop")
 				return
@@ -305,11 +304,11 @@ func (c *Cron) run() {
 }
 
 // startJob runs the given job in a new goroutine.
-func (c *Cron) startJob(j Job) {
+func (c *Cron) startJob(ctx context.Context, j Job) {
 	c.jobWaiter.Add(1)
 	go func() {
 		defer c.jobWaiter.Done()
-		j.Run()
+		j.Run(ctx)
 	}()
 }
 
@@ -318,26 +317,18 @@ func (c *Cron) now() time.Time {
 	return time.Now().In(c.location)
 }
 
-// Stop stops the cron scheduler if it is running; otherwise it does nothing.
-// A context is returned so the caller can wait for running jobs to complete.
-func (c *Cron) Stop() context.Context {
+// Wait waits for all running jobs to exit. This can be used with context
+// cancellation to gracefully stop the run loop.
+func (c *Cron) Wait() {
 	c.runningMu.Lock()
 	defer c.runningMu.Unlock()
-	if c.running {
-		c.stop <- struct{}{}
-		c.running = false
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		c.jobWaiter.Wait()
-		cancel()
-	}()
-	return ctx
+	c.jobWaiter.Wait()
+	c.running = false
 }
 
 // entrySnapshot returns a copy of the current cron entry list.
 func (c *Cron) entrySnapshot() []Entry {
-	var entries = make([]Entry, len(c.entries))
+	entries := make([]Entry, len(c.entries))
 	for i, e := range c.entries {
 		entries[i] = *e
 	}

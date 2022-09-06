@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"context"
 	"log"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestWithLocation(t *testing.T) {
 }
 
 func TestWithParser(t *testing.T) {
-	var parser = NewParser(Dow)
+	parser := NewParser(Dow)
 	c := New(WithParser(parser))
 	if c.parser != parser {
 		t.Error("expected provided parser")
@@ -24,16 +25,17 @@ func TestWithParser(t *testing.T) {
 
 func TestWithVerboseLogger(t *testing.T) {
 	var buf syncWriter
-	var logger = log.New(&buf, "", log.LstdFlags)
+	logger := log.New(&buf, "", log.LstdFlags)
 	c := New(WithLogger(VerbosePrintfLogger(logger)))
 	if c.logger.(printfLogger).logger != logger {
 		t.Error("expected provided logger")
 	}
 
-	c.AddFunc("@every 1s", func() {})
-	c.Start()
-	time.Sleep(OneSecond)
-	c.Stop()
+	c.AddFunc("@every 1s", func(context.Context) {})
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Start(ctx)
+	time.Sleep(oneSecond)
+	cancel()
 	out := buf.String()
 	if !strings.Contains(out, "schedule,") ||
 		!strings.Contains(out, "run,") {
