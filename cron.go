@@ -61,6 +61,9 @@ type Entry struct {
 	// Prev is the last time this job was run, or the zero time if never.
 	Prev time.Time
 
+	// AdHocInvokedTime will record the invocation time of manually triggered job runs.
+	AdHocInvokedTime time.Time
+
 	// WrappedJob is the thing to run when the Schedule is activated.
 	WrappedJob Job
 
@@ -107,17 +110,17 @@ func (s byTime) Less(i, j int) bool {
 //
 // Available Settings
 //
-//   Time Zone
-//     Description: The time zone in which schedules are interpreted
-//     Default:     time.Local
+//	Time Zone
+//	  Description: The time zone in which schedules are interpreted
+//	  Default:     time.Local
 //
-//   Parser
-//     Description: Parser converts cron spec strings into cron.Schedules.
-//     Default:     Accepts this spec: https://en.wikipedia.org/wiki/Cron
+//	Parser
+//	  Description: Parser converts cron spec strings into cron.Schedules.
+//	  Default:     Accepts this spec: https://en.wikipedia.org/wiki/Cron
 //
-//   Chain
-//     Description: Wrap submitted jobs to customize behavior.
-//     Default:     A chain that recovers panics and logs them to stderr.
+//	Chain
+//	  Description: Wrap submitted jobs to customize behavior.
+//	  Default:     A chain that recovers panics and logs them to stderr.
 //
 // See "cron.With*" to modify the default behavior.
 func New(opts ...Option) *Cron {
@@ -235,6 +238,18 @@ func (c *Cron) Remove(id EntryID) {
 	}
 }
 
+// SetInvocationTimeForEntry allows updating an entry with invocation time for manually triggered runs. This can be used
+// for calculation of execution start delay/latency metric.
+func (c *Cron) SetInvocationTimeForEntry(id EntryID, invocationTime time.Time) {
+	c.runningMu.Lock()
+	defer c.runningMu.Unlock()
+	for _, entry := range c.entries {
+		if entry.ID == id {
+			entry.AdHocInvokedTime = invocationTime
+		}
+	}
+}
+
 // Start the cron scheduler in its own goroutine, or no-op if already started.
 func (c *Cron) Start(ctx context.Context) {
 	c.runningMu.Lock()
@@ -259,7 +274,7 @@ func (c *Cron) Run(ctx context.Context) {
 	c.run(ctx)
 }
 
-// run the scheduler.. this is private just due to the need to synchronize
+// run the scheduler. this is private just due to the need to synchronize
 // access to the 'running' state variable.
 func (c *Cron) run(ctx context.Context) {
 	c.logger.Info("start")
@@ -298,6 +313,7 @@ func (c *Cron) run(ctx context.Context) {
 					c.startJob(ctx, e.WrappedJob)
 					e.Prev = e.Next
 					e.Next = e.Schedule.Next(now)
+					e.AdHocInvokedTime = time.Time{} // reset the adhoc invoked time if it was set previous to this run.
 					c.logger.Info("run", "now", now, "entry", e.ID, "next", e.Next)
 				}
 
