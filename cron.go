@@ -310,10 +310,10 @@ func (c *Cron) run(ctx context.Context) {
 					if e.Next.After(now) || e.Next.IsZero() {
 						break
 					}
-					c.startJob(ctx, e.WrappedJob)
 					e.Prev = e.Next
 					e.Next = e.Schedule.Next(now)
 					e.AdHocInvokedTime = time.Time{} // reset the adhoc invoked time if it was set previous to this run.
+					c.startJob(ctx, e.WrappedJob)
 					c.logger.Info("run", "now", now, "entry", e.ID, "next", e.Next)
 				}
 
