@@ -544,7 +544,7 @@ func TestScheduleAfterRemoval(t *testing.T) {
 
 type ZeroSchedule struct{}
 
-func (*ZeroSchedule) Next(time.Time) time.Time {
+func (*ZeroSchedule) Next(from, after time.Time) time.Time {
 	return time.Time{}
 }
 

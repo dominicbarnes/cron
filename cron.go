@@ -37,9 +37,10 @@ type Job interface {
 
 // Schedule describes a job's duty cycle.
 type Schedule interface {
-	// Next returns the next activation time, later than the given time.
+	// Next returns the next activation time, later than the current time.
+	// If `after` time is provided then the activation time returned will be later than `after`.
 	// Next is invoked initially, and then each time the job is run.
-	Next(time.Time) time.Time
+	Next(from, after time.Time) time.Time
 }
 
 // EntryID identifies an entry within a Cron instance
@@ -81,9 +82,9 @@ func (e Entry) Valid() bool { return e.ID != 0 }
 // to be preserved across process restarts.
 func (e Entry) ScheduleFirst(now time.Time) time.Time {
 	if !e.Prev.IsZero() {
-		return e.Schedule.Next(e.Prev)
+		return e.Schedule.Next(e.Prev, now)
 	} else {
-		return e.Schedule.Next(now)
+		return e.Schedule.Next(now, time.Time{})
 	}
 }
 
@@ -311,7 +312,7 @@ func (c *Cron) run(ctx context.Context) {
 						break
 					}
 					e.Prev = e.Next
-					e.Next = e.Schedule.Next(now)
+					e.Next = e.Schedule.Next(e.Prev, now)
 					e.AdHocInvokedTime = time.Time{} // reset the adhoc invoked time if it was set previous to this run.
 					c.startJob(ctx, e.WrappedJob)
 					c.logger.Info("run", "now", now, "entry", e.ID, "next", e.Next)
@@ -320,7 +321,7 @@ func (c *Cron) run(ctx context.Context) {
 			case newEntry := <-c.add:
 				timer.Stop()
 				now = c.now()
-				newEntry.Next = newEntry.ScheduleFirst(now)
+				newEntry.Next = newEntry.ScheduleFirst(now) // ScheduleFuture
 				c.entries = append(c.entries, newEntry)
 				c.logger.Info("added", "now", now, "entry", newEntry.ID, "next", newEntry.Next)
 
