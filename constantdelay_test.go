@@ -66,6 +66,9 @@ func TestConstantDelayNextWithAfter(t *testing.T) {
 		{"Mon Jul 9 14:59 2012", 15 * time.Minute, "Mon Jul 9 15:15:00.005 2012", "Mon Jul 9 15:29 2012"},
 		{"Mon Jul 9 14:59:59 2012", 15 * time.Minute, "Mon Jul 9 15:15 2012", "Mon Jul 9 15:29:59 2012"},
 
+		// Simple case with from and after having same value
+		{"Mon Jul 9 14:45 2012", 15 * time.Minute, "Mon Jul 9 14:45:00 2012", "Mon Jul 9 15:00 2012"},
+
 		// Wrap around hours
 		{"Mon Jul 9 15:45 2012", 35 * time.Minute, "Mon Jul 9 17:00 2012", "Mon Jul 9 17:30 2012"},
 
