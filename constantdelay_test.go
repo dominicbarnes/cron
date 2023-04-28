@@ -52,3 +52,54 @@ func TestConstantDelayNext(t *testing.T) {
 		}
 	}
 }
+
+func TestConstantDelayNextWithAfter(t *testing.T) {
+	tests := []struct {
+		time     string
+		delay    time.Duration
+		after    string
+		expected string
+	}{
+		// Simple cases
+		{"Mon Jul 9 14:45 2012", 15*time.Minute + 50*time.Nanosecond, "Mon Jul 9 15:15:00.005 2012", "Mon Jul 9 15:30 2012"},
+		{"Mon Jul 9 14:45 2012", 15*time.Minute + 50*time.Nanosecond, "Mon Jul 9 15:27 2015", "Mon Jul 9 15:30 2015"},
+		{"Mon Jul 9 14:59 2012", 15 * time.Minute, "Mon Jul 9 15:15:00.005 2012", "Mon Jul 9 15:29 2012"},
+		{"Mon Jul 9 14:59:59 2012", 15 * time.Minute, "Mon Jul 9 15:15 2012", "Mon Jul 9 15:29:59 2012"},
+
+		// Simple case with from and after having same value
+		{"Mon Jul 9 14:45 2012", 15 * time.Minute, "Mon Jul 9 14:45:00 2012", "Mon Jul 9 15:00 2012"},
+
+		// Wrap around hours
+		{"Mon Jul 9 15:45 2012", 35 * time.Minute, "Mon Jul 9 17:00 2012", "Mon Jul 9 17:30 2012"},
+
+		// Wrap around days
+		{"Mon Jul 9 23:48 2012", 14 * time.Minute, "Tue Jul 10 00:00 2012", "Tue Jul 10 00:02 2012"},
+		{"Mon Jul 9 23:45 2012", 35 * time.Minute, "Tue Jul 10 00:00 2012", "Tue Jul 10 00:20 2012"},
+		{"Mon Jul 9 23:35:51 2012", 44*time.Minute + 24*time.Second, "Tue Jul 10 00:30:00 2012", "Tue Jul 10 01:04:39 2012"},
+		{"Mon Jul 9 23:35:51 2012", 25*time.Hour + 44*time.Minute + 24*time.Second, "Thu Jul 10 12:00:00 2012", "Thu Jul 11 01:20:15 2012"},
+
+		// Wrap around months
+		{"Mon Jul 9 23:35 2012", 91*24*time.Hour + 25*time.Minute, "Thu Oct 11 00:00 2012", "Mon Jan 07 23:25 2013"},
+
+		// Wrap around minute, hour, day, month, and year
+		{"Mon Dec 31 23:59:45 2012", 15 * time.Minute, "Tue Jan 1 12:00:00 2013", "Tue Jan 1 12:14:45 2013"},
+
+		// Round to the nearest second on the delay
+		{"Mon Jul 9 14:45 2012", 15*time.Minute + 50*time.Nanosecond, "Mon Jul 9 16:00 2012", "Mon Jul 9 16:15 2012"},
+
+		// Round to the nearest second when calculating the next time.
+		{"Mon Jul 9 14:45:00.005 2012", 15 * time.Minute, "Mon Jul 9 15:25 2012", "Mon Jul 9 15:30 2012"},
+
+		// Round to the nearest second for both.
+		{"Mon Jul 9 14:45:00.005 2012", 15*time.Minute + 50*time.Nanosecond, "", "Mon Jul 9 15:00 2012"},
+		{"Mon Jul 9 14:45:00.005 2012", 15*time.Minute + 50*time.Nanosecond, "Mon Jul 9 15:30 2012", "Mon Jul 9 15:45 2012"},
+	}
+
+	for _, c := range tests {
+		actual := Every(c.delay).NextWithAfter(getTime(c.time), getTime(c.after))
+		expected := getTime(c.expected)
+		if actual != expected {
+			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.delay, expected, actual)
+		}
+	}
+}

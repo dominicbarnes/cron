@@ -37,9 +37,16 @@ type Job interface {
 
 // Schedule describes a job's duty cycle.
 type Schedule interface {
-	// Next returns the next activation time, later than the given time.
+	// Next returns the next activation time.
 	// Next is invoked initially, and then each time the job is run.
-	Next(time.Time) time.Time
+	// `from` is the starting time instant to begin the delay calculation.
+	Next(from time.Time) time.Time
+
+	// NextWithAfter returns the next activation time, later than the after time.
+	// If `after` time provided is non-zero then the activation time returned will be later than `after`.
+	// `from` is the starting time instant to begin the delay calculation
+	// `after` is the time instant the calculated next instant should be after
+	NextWithAfter(from, after time.Time) time.Time
 }
 
 // EntryID identifies an entry within a Cron instance
@@ -81,9 +88,9 @@ func (e Entry) Valid() bool { return e.ID != 0 }
 // to be preserved across process restarts.
 func (e Entry) ScheduleFirst(now time.Time) time.Time {
 	if !e.Prev.IsZero() {
-		return e.Schedule.Next(e.Prev)
+		return e.Schedule.NextWithAfter(e.Prev, now)
 	} else {
-		return e.Schedule.Next(now)
+		return e.Schedule.NextWithAfter(now, time.Time{})
 	}
 }
 
@@ -310,10 +317,10 @@ func (c *Cron) run(ctx context.Context) {
 					if e.Next.After(now) || e.Next.IsZero() {
 						break
 					}
-					c.startJob(ctx, e.WrappedJob)
 					e.Prev = e.Next
-					e.Next = e.Schedule.Next(now)
+					e.Next = e.Schedule.NextWithAfter(e.Prev, now)
 					e.AdHocInvokedTime = time.Time{} // reset the adhoc invoked time if it was set previous to this run.
+					c.startJob(ctx, e.WrappedJob)
 					c.logger.Info("run", "now", now, "entry", e.ID, "next", e.Next)
 				}
 
