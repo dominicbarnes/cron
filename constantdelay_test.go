@@ -45,7 +45,7 @@ func TestConstantDelayNext(t *testing.T) {
 	}
 
 	for _, c := range tests {
-		actual := Every(c.delay).Next(getTime(c.time), time.Time{})
+		actual := Every(c.delay).Next(getTime(c.time))
 		expected := getTime(c.expected)
 		if actual != expected {
 			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.delay, expected, actual)
@@ -93,7 +93,7 @@ func TestConstantDelayNextWithAfter(t *testing.T) {
 	}
 
 	for _, c := range tests {
-		actual := Every(c.delay).Next(getTime(c.time), getTime(c.after))
+		actual := Every(c.delay).NextWithAfter(getTime(c.time), getTime(c.after))
 		expected := getTime(c.expected)
 		if actual != expected {
 			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.delay, expected, actual)

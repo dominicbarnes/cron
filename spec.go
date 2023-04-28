@@ -53,11 +53,17 @@ const (
 	starBit = 1 << 63
 )
 
-// Next returns the next time this schedule is activated, greater than the given
+// Next returns the next time this schedule is activated.
+// `from` is the starting time instant to begin the delay calculation.
+func (s *SpecSchedule) Next(from time.Time) time.Time {
+	return s.NextWithAfter(from, time.Time{})
+}
+
+// NextWithAfter returns the next time this schedule is activated, greater than the given
 // time.  If no time can be found to satisfy the schedule, return the zero time.
 // If `after` time is specified then the next activation time which is later than
 // `after` is returned.
-func (s *SpecSchedule) Next(t time.Time, after time.Time) time.Time {
+func (s *SpecSchedule) NextWithAfter(t, after time.Time) time.Time {
 	// General approach
 	//
 	// For Month, Day, Hour, Minute, Second:

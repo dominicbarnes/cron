@@ -62,7 +62,7 @@ func TestActivation(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		actual := sched.Next(getTime(test.time).Add(-1*time.Second), time.Time{})
+		actual := sched.Next(getTime(test.time).Add(-1 * time.Second))
 		expected := getTime(test.time)
 		if test.expected && expected != actual || !test.expected && expected == actual {
 			t.Errorf("Fail evaluating %s on %s: (expected) %s != %s (actual)",
@@ -191,7 +191,7 @@ func TestNext(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		actual := sched.Next(getTime(c.time), time.Time{})
+		actual := sched.Next(getTime(c.time))
 		expected := getTime(c.expected)
 		if !actual.Equal(expected) {
 			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.spec, expected, actual)
@@ -208,6 +208,9 @@ func TestNextAfterTime(t *testing.T) {
 		{"Mon Jul 9 14:45 2012", "0 0/15 * * * *", "Mon Jul 9 15:30 2012", "Mon Jul 9 15:45 2012"},
 		{"Mon Jul 9 14:59 2012", "0 0/15 * * * *", "Wed Jul 11 15:30 2012", "Wed Jul 11 15:45 2012"},
 		{"Mon Jul 9 14:59:59 2012", "0 0/15 * * * *", "Wed Jul 11 15:00 2012", "Wed Jul 11 15:15 2012"},
+
+		// Simple cases with same From and After values
+		{"Mon Jul 9 14:45 2012", "0 0/15 * * * *", "Mon Jul 9 14:45 2012", "Mon Jul 9 15:00 2012"},
 
 		// Wrap around hours
 		{"Mon Jul 9 15:45 2012", "0 20-35/15 * * * *", "Wed Jul 11 16:36 2012", "Wed Jul 11 17:20 2012"},
@@ -281,7 +284,7 @@ func TestNextAfterTime(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		actual := sched.Next(getTime(c.time), getTime(c.after))
+		actual := sched.NextWithAfter(getTime(c.time), getTime(c.after))
 		expected := getTime(c.expected)
 		if !actual.Equal(expected) {
 			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.spec, expected, actual)
@@ -354,7 +357,7 @@ func TestNextWithTz(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		actual := sched.Next(getTimeTZ(c.time), time.Time{})
+		actual := sched.Next(getTimeTZ(c.time))
 		expected := getTimeTZ(c.expected)
 		if !actual.Equal(expected) {
 			t.Errorf("%s, \"%s\": (expected) %v != %v (actual)", c.time, c.spec, expected, actual)
